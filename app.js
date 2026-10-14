@@ -112,6 +112,9 @@ let turnLayerGroup;
 // Hash SHA-256 de la clave autorizada (protege la clave sin exponer el texto en GitHub)
 const AUTH_PASSWORD_HASH = 'bc1fae8f1a53b3474f9dcc2f3b1083d90669bd8fa7a9d021eccaca1659c4f446';
 
+// API Key predeterminada de OpenRouteService (HGV Truck)
+const DEFAULT_ORS_API_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjMzMjI1ODc4NjA2YzRlNTZhOTJlOTYyZWE1NWYyNDk5IiwiaCI6Im11cm11cjY0In0=';
+
 async function computeSha256(str) {
   if (window.crypto && crypto.subtle) {
     const buf = new TextEncoder().encode(str);
@@ -637,17 +640,12 @@ function updateTruckSummaryPill() {
 // Cargar y restaurar configuraciones y API Keys desde localStorage
 function loadStoredSettings() {
   try {
-    const savedOrsKey = localStorage.getItem('adritruck_ors_key');
-    if (savedOrsKey) {
-      const orsInput = document.getElementById('orsApiKey');
-      if (orsInput) orsInput.value = savedOrsKey;
-    }
+    const savedOrsKey = localStorage.getItem('adritruck_ors_key') || DEFAULT_ORS_API_KEY;
+    const orsInput = document.getElementById('orsApiKey');
+    if (orsInput) orsInput.value = savedOrsKey;
 
     const savedHereKey = localStorage.getItem('adritruck_here_key');
-    if (savedHereKey) {
-      const hereInput = document.getElementById('hereApiKey');
-      if (hereInput) hereInput.value = savedHereKey;
-    }
+    if (hereInput) hereInput.value = savedHereKey;
 
     const savedEngine = localStorage.getItem('adritruck_engine');
     if (savedEngine) {
@@ -690,13 +688,8 @@ async function calculateRoute() {
         truckResult = await fetchHereTruckRoute(apiKey);
       }
     } else if (selectedEngine === 'ors') {
-      const apiKey = document.getElementById('orsApiKey').value.trim();
-      if (!apiKey) {
-        alert('Para usar OpenRouteService HGV necesitas introducir tu API Key en la pestaña Motor. Usando Valhalla OSM por defecto.');
-        truckResult = await fetchValhallaRoute('truck');
-      } else {
-        truckResult = await fetchOrsTruckRoute(apiKey);
-      }
+      const apiKey = document.getElementById('orsApiKey')?.value.trim() || DEFAULT_ORS_API_KEY;
+      truckResult = await fetchOrsTruckRoute(apiKey);
     } else {
       truckResult = await fetchValhallaRoute('truck');
     }
