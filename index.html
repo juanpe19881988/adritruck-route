@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0f172a" />
+  <title>AdriTruck Route — Planificador de Rutas para Camiones</title>
+  <link rel="manifest" href="manifest.json" />
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- App CSS -->
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Top Header Bar -->
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-icon">🚛</div>
+      <div>
+        <h1>AdriTruck <span class="badge-pro">PRO</span></h1>
+        <p class="subtitle">Rutas por Dimensiones, Gálibos y Giros</p>
+      </div>
+    </div>
+
+    <!-- Active Truck Summary Pill (Visible on Mobile & Desktop) -->
+    <button id="btnQuickSpec" class="truck-summary-pill" title="Cambiar medidas del camión">
+      <span id="pillTypeIcon">🚛</span>
+      <span id="pillDimensions">16.5m · ↕ 4.0m · ↔ 2.55m · 40t</span>
+      <span class="pill-edit">⚙️</span>
+    </button>
+
+    <div class="header-actions">
+      <button id="btnDemoRoutes" class="btn-secondary btn-sm" title="Cargar ejemplos reales en España">
+        📍 Ejemplos España
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <div class="app-layout">
+    <!-- Left / Bottom Control Panel -->
+    <aside class="control-panel" id="controlPanel">
+      <!-- Mobile Handle to expand/collapse panel -->
+      <div class="mobile-sheet-handle" id="mobileSheetHandle">
+        <div class="handle-bar"></div>
+        <span id="mobileHandleText">Configurar Ruta y Camión</span>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="panel-tabs">
+        <button class="tab-btn active" data-tab="tab-ruta">
+          <span>📍</span> Ruta
+        </button>
+        <button class="tab-btn" data-tab="tab-camion">
+          <span>📐</span> Camión
+        </button>
+        <button class="tab-btn" data-tab="tab-maniobras">
+          <span>⚠️</span> Giros y Alertas <span id="alertCountBadge" class="tab-badge hidden">0</span>
+        </button>
+        <button class="tab-btn" data-tab="tab-motor">
+          <span>⚙️</span> Motor
+        </button>
+      </nav>
+
+      <!-- TAB 1: RUTA (Origen, Destino, Resumen y Exportar) -->
+      <section id="tab-ruta" class="tab-content active">
+        <div class="click-mode-banner">
+          <span>Tocar en el mapa coloca:</span>
+          <div class="click-mode-toggle">
+            <button type="button" id="modeOriginBtn" class="mode-btn active">🟢 Origen (A)</button>
+            <button type="button" id="modeDestBtn" class="mode-btn">🔴 Destino (B)</button>
+          </div>
+        </div>
+
+        <!-- Inputs de Origen y Destino -->
+        <div class="waypoints-box">
+          <!-- Origen -->
+          <div class="input-group">
+            <label for="originInput" class="point-label origin-dot">A</label>
+            <div class="autocomplete-wrapper">
+              <input type="text" id="originInput" placeholder="Buscar origen o tocar el mapa..." autocomplete="off" />
+              <button type="button" id="btnMyLocation" class="icon-btn" title="Usar mi ubicación GPS actual">🎯</button>
+              <div id="originSuggestions" class="suggestions-list hidden"></div>
+            </div>
+          </div>
+
+          <!-- Swap Button -->
+          <div class="swap-row">
+            <div class="connector-line"></div>
+            <button type="button" id="btnSwapPoints" class="btn-swap" title="Invertir Origen y Destino">⇅ Invertir</button>
+          </div>
+
+          <!-- Destino -->
+          <div class="input-group">
+            <label for="destInput" class="point-label dest-dot">B</label>
+            <div class="autocomplete-wrapper">
+              <input type="text" id="destInput" placeholder="Buscar destino o tocar el mapa..." autocomplete="off" />
+              <button type="button" id="btnClearPoints" class="icon-btn" title="Limpiar puntos">✕</button>
+              <div id="destSuggestions" class="suggestions-list hidden"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Opciones Visuales Rápidas -->
+        <div class="visual-toggles">
+          <label class="toggle-item">
+            <input type="checkbox" id="chkCompareCar" checked />
+            <span>Comparar con ruta de Coche (ver desvíos)</span>
+          </label>
+          <label class="toggle-item">
+            <input type="checkbox" id="chkShowHazards" checked />
+            <span>Radar de Gálibos, Tonelaje y Prohibiciones</span>
+          </label>
+          <label class="toggle-item">
+            <input type="checkbox" id="chkHighlightTurns" checked />
+            <span>Avisar giros cerrados para el largo del camión</span>
+          </label>
+        </div>
+
+        <!-- Botón Principal de Cálculo -->
+        <button type="button" id="btnCalculateRoute" class="btn-primary-large">
+          🚀 Calcular Mejor Ruta para Camión
+        </button>
+
+        <!-- Tarjeta de Resultado de la Ruta -->
+        <div id="routeResultCard" class="route-result-card hidden">
+          <div class="result-header">
+            <span id="routeEngineBadge" class="engine-tag">Valhalla OSM Truck</span>
+            <span id="routeStatusBadge" class="status-tag status-ok">Ruta Segura</span>
+          </div>
+
+          <div class="metrics-grid">
+            <div class="metric-box">
+              <span class="metric-label">Distancia Camión</span>
+              <strong id="metricDistance" class="metric-value">-- km</strong>
+            </div>
+            <div class="metric-box">
+              <span class="metric-label">Tiempo Estimado</span>
+              <strong id="metricDuration" class="metric-value">-- min</strong>
+            </div>
+            <div class="metric-box">
+              <span class="metric-label">Giros Complejos</span>
+              <strong id="metricSharpTurns" class="metric-value">0</strong>
+            </div>
+          </div>
+
+          <div id="carComparisonNotice" class="comparison-notice hidden"></div>
+
+          <!-- Exportar a Navegadores GPS -->
+          <div class="export-section">
+            <p class="export-title">📲 Enviar a navegador con voz (forzando ruta segura):</p>
+            <div class="export-buttons">
+              <a id="btnExportGmaps" href="#" target="_blank" rel="noopener" class="btn-export gmaps">
+                🗺️ Abrir en Google Maps (con Waypoints)
+              </a>
+              <a id="btnExportWaze" href="#" target="_blank" rel="noopener" class="btn-export waze">
+                🚗 Destino en Waze
+              </a>
+            </div>
+            <small class="export-hint">
+              * El botón de Google Maps inyecta hasta 8 puntos de paso intermedios para obligar al GPS a seguir la ruta de camión y evitar calles estrechas.
+            </small>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: CAMIÓN (Dimensiones, Tipo de Giro, Tonelaje) -->
+      <section id="tab-camion" class="tab-content">
+        <div class="section-title">1. Plantillas Rápidas</div>
+        <div class="preset-grid">
+          <button type="button" class="preset-card" data-preset="furgon">
+            <span class="preset-icon">🚐</span>
+            <strong>Carrozado / 3.5t</strong>
+            <small>6.5m · ↕3.1m · Rígido</small>
+          </button>
+          <button type="button" class="preset-card" data-preset="rigido2">
+            <span class="preset-icon">🚚</span>
+            <strong>Rígido 2 Ejes</strong>
+            <small>8.5m · ↕3.5m · 18t</small>
+          </button>
+          <button type="button" class="preset-card" data-preset="rigido3">
+            <span class="preset-icon">🚛</span>
+            <strong>Rígido 3 Ejes</strong>
+            <small>11.0m · ↕3.8m · 26t</small>
+          </button>
+          <button type="button" class="preset-card active" data-preset="trailer">
+            <span class="preset-icon">🚛</span>
+            <strong>Tráiler 16.5m</strong>
+            <small>16.5m · ↕4.0m · 40t</small>
+          </button>
+        </div>
+
+        <div class="section-title">2. Geometría de Giro (Tipo de Chasis)</div>
+        <div class="chassis-selector">
+          <label class="chassis-option">
+            <input type="radio" name="truckType" value="rigid" />
+            <div class="chassis-box">
+              <strong>🚚 Camión Rígido</strong>
+              <small>Radio de giro medio. Sin articulación de semirremolque.</small>
+            </div>
+          </label>
+          <label class="chassis-option">
+            <input type="radio" name="truckType" value="articulated" checked />
+            <div class="chassis-box">
+              <strong>🚛 Articulado (Tráiler / Remolque)</strong>
+              <small>Penaliza giros >90° en calles estrechas y rotondas pequeñas.</small>
+            </div>
+          </label>
+        </div>
+
+        <div class="section-title">3. Dimensiones y Pesos Exactos</div>
+        <div class="dimensions-grid">
+          <div class="dim-field">
+            <label for="truckLength">📏 Longitud Total (m)</label>
+            <div class="dim-input-row">
+              <input type="number" id="truckLength" min="4.5" max="30" step="0.25" value="16.5" />
+              <span class="unit">m</span>
+            </div>
+            <small>Estándar tráiler: 16.5m | Rígido: 7-12m</small>
+          </div>
+
+          <div class="dim-field">
+            <label for="truckHeight">↕️ Altura / Gálibo (m)</label>
+            <div class="dim-input-row">
+              <input type="number" id="truckHeight" min="2.0" max="5.5" step="0.05" value="4.0" />
+              <span class="unit">m</span>
+            </div>
+            <small>Crítico para puentes y túneles</small>
+          </div>
+
+          <div class="dim-field">
+            <label for="truckWidth">↔️ Anchura (m)</label>
+            <div class="dim-input-row">
+              <input type="number" id="truckWidth" min="1.8" max="3.5" step="0.05" value="2.55" />
+              <span class="unit">m</span>
+            </div>
+            <small>Lona: 2.55m | Frigorífico: 2.60m</small>
+          </div>
+
+          <div class="dim-field">
+            <label for="truckWeight">⚖️ Peso Total MMA (t)</label>
+            <div class="dim-input-row">
+              <input type="number" id="truckWeight" min="2.5" max="70" step="0.5" value="40" />
+              <span class="unit">t</span>
+            </div>
+            <small>Masa máxima autorizada actual</small>
+          </div>
+
+          <div class="dim-field">
+            <label for="truckAxleLoad">🛞 Peso Máx. por Eje (t)</label>
+            <div class="dim-input-row">
+              <input type="number" id="truckAxleLoad" min="2.0" max="16" step="0.5" value="11.5" />
+              <span class="unit">t</span>
+            </div>
+            <small>Eje motor europeo: 11.5t</small>
+          </div>
+
+          <div class="dim-field">
+            <label for="truckAxles">🔢 Número de Ejes</label>
+            <div class="dim-input-row">
+              <input type="number" id="truckAxles" min="2" max="8" step="1" value="5" />
+              <span class="unit">ejes</span>
+            </div>
+            <small>Usado en peajes y restricciones</small>
+          </div>
+        </div>
+
+        <div class="extra-restrictions">
+          <label class="toggle-item">
+            <input type="checkbox" id="chkHazmat" />
+            <span>☣️ Mercancías Peligrosas (ADR / Restricción túneles)</span>
+          </label>
+          <label class="toggle-item">
+            <input type="checkbox" id="chkAvoidTolls" />
+            <span>💶 Evitar Autopistas de Peaje</span>
+          </label>
+        </div>
+
+        <button type="button" id="btnApplyTruckSpec" class="btn-primary-large">
+          ✅ Aplicar Medidas y Recalcular
+        </button>
+      </section>
+
+      <!-- TAB 3: GIROS Y ALERTAS (Restricciones detectadas y Maniobras) -->
+      <section id="tab-maniobras" class="tab-content">
+        <div class="alerts-summary-box">
+          <div class="section-title">⚠️ Restricciones y Giros en la Zona</div>
+          <p class="helper-text">
+            Toca cualquier alerta para centrar el mapa en ese puente, calle o giro complicado.
+          </p>
+          <div id="hazardsList" class="hazards-list">
+            <div class="empty-state">
+              Calcula una ruta para escanear puentes bajos, límites de peso y giros cerrados para tus metros de camión.
+            </div>
+          </div>
+        </div>
+
+        <div class="maneuvers-box">
+          <div class="section-title">🧭 Instrucciones Paso a Paso</div>
+          <div id="maneuversList" class="maneuvers-list">
+            <div class="empty-state">Sin ruta activa.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: MOTOR DE RUTAS (Comparador Open Source vs Comercial) -->
+      <section id="tab-motor" class="tab-content">
+        <div class="section-title">Motor de Cálculo de Rutas</div>
+        <p class="helper-text">
+          Puedes alternar entre el motor Open Source gratuito (activo sin claves) o conectar APIs comerciales de transporte profesional.
+        </p>
+
+        <div class="engine-selector">
+          <label class="engine-card">
+            <input type="radio" name="routingEngine" value="valhalla" checked />
+            <div class="engine-card-body">
+              <div class="engine-header-row">
+                <strong>🌍 Valhalla Truck (OpenStreetMap)</strong>
+                <span class="badge-free">GRATIS · SIN CLAVE</span>
+              </div>
+              <small>
+                Soporta longitud, altura, anchura, peso, peso por eje, ADR y penalización dinámica de giros según metros del camión.
+              </small>
+            </div>
+          </label>
+
+          <label class="engine-card">
+            <input type="radio" name="routingEngine" value="here" />
+            <div class="engine-card-body">
+              <div class="engine-header-row">
+                <strong>🏢 HERE Truck Routing v8</strong>
+                <span class="badge-commercial">COMERCIAL (Freemium)</span>
+              </div>
+              <small>
+                Cartografía industrial (Mercedes/Garmin). Soporta número de remolques, ejes y restricción física de giros difíciles.
+              </small>
+            </div>
+          </label>
+
+          <label class="engine-card">
+            <input type="radio" name="routingEngine" value="ors" />
+            <div class="engine-card-body">
+              <div class="engine-header-row">
+                <strong>🛣️ OpenRouteService HGV</strong>
+                <span class="badge-commercial">API KEY GRATUITA</span>
+              </div>
+              <small>
+                Motor europeo especializado en Heavy Goods Vehicles (HGV) sobre OpenStreetMap.
+              </small>
+            </div>
+          </label>
+        </div>
+
+        <!-- Configuración de Claves API opcionales -->
+        <div id="apiKeyContainer" class="api-key-box">
+          <div class="dim-field">
+            <label for="hereApiKey">🔑 HERE API Key <small style="color:#10b981;">(Se guarda automáticamente)</small></label>
+            <input type="password" id="hereApiKey" placeholder="Pega tu API Key de developer.here.com..." />
+          </div>
+          <div class="dim-field" style="margin-top:10px;">
+            <label for="orsApiKey">🔑 OpenRouteService API Key <small style="color:#10b981;">(Se guarda automáticamente)</small></label>
+            <input type="password" id="orsApiKey" placeholder="Pega tu API Key de openrouteservice.org..." />
+          </div>
+          <label class="toggle-item" style="margin-top:10px;">
+            <input type="checkbox" id="chkCompareEngines" />
+            <span>🔬 Superponer Valhalla vs. Motor Comercial en el mapa</span>
+          </label>
+        </div>
+      </section>
+    </aside>
+
+    <!-- Map Area -->
+    <main class="map-wrapper">
+      <div id="map"></div>
+
+      <!-- Floating Map Controls (Layer Switcher & Legend) -->
+      <div class="map-floating-top">
+        <div class="map-layer-pill">
+          <button type="button" class="layer-btn active" data-layer="streets">🗺️ Mapa</button>
+          <button type="button" class="layer-btn" data-layer="satellite">🛰️ Satélite (Ver Muelles/Giros)</button>
+        </div>
+      </div>
+
+      <!-- Map Legend -->
+      <div class="map-legend" id="mapLegend">
+        <div class="legend-item">
+          <span class="legend-line truck-line"></span> Ruta Camión Segura
+        </div>
+        <div class="legend-item">
+          <span class="legend-line car-line"></span> Ruta Coche (Descartada)
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot hazard-critical"></span> Peligro Crítico (No pasas)
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot turn-warn"></span> Giro Cerrado (Maniobra)
+        </div>
+      </div>
+
+      <!-- Loading Overlay -->
+      <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="spinner"></div>
+        <span id="loadingText">Calculando ruta segura para 16.5m...</span>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal de Ejemplos en España -->
+  <div id="demoModal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>📍 Escenarios de Prueba en España</h3>
+        <button type="button" id="btnCloseModal" class="icon-btn">✕</button>
+      </div>
+      <p class="helper-text">
+        Selecciona un caso real para ver cómo el motor adapta la ruta según la altura de los puentes, calles estrechas y los metros del camión:
+      </p>
+      <div class="demo-list">
+        <button type="button" class="demo-item" data-demo="madrid_puentes">
+          <strong>🌉 Madrid: Puentes Bajos y Pasos Inferiores (Pacífico / Atocha → Méndez Álvaro)</strong>
+          <small>Compara cómo un coche va directo y un tráiler de 4.0m rodea los pasos inferiores y calles estrechas.</small>
+        </button>
+        <button type="button" class="demo-item" data-demo="coslada_mercamadrid">
+          <strong>🏭 Logística Madrid: Polígono Coslada (CTC) → Mercamadrid</strong>
+          <small>Ruta clásica de transporte pesado evitando accesos restringidos a vehículos de más de 16m y 40t.</small>
+        </button>
+        <button type="button" class="demo-item" data-demo="toledo_casco">
+          <strong>🏰 Calles Estrechas y Giros: Polígono Toledo → Acceso Urbano Toledo</strong>
+          <small>Observa las alertas de anchura, peso máximo y giros cerrados para camiones largos.</small>
+        </button>
+        <button type="button" class="demo-item" data-demo="barcelona_puerto">
+          <strong>⚓ Barcelona: Zona Franca Logística → Polígono Badalona Sur</strong>
+          <small>Análisis de rondas, gálibos y comparación entre ruta de turismo vs. vehículo pesado articulado.</small>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <!-- App Logic -->
+  <script src="app.js"></script>
+</body>
+</html>
