@@ -108,8 +108,124 @@ let routeLayerGroup;
 let hazardLayerGroup;
 let turnLayerGroup;
 
+// --- Seguridad y Control de Acceso por Contraseña ---
+// Hash SHA-256 de la clave autorizada (protege la clave sin exponer el texto en GitHub)
+const AUTH_PASSWORD_HASH = 'bc1fae8f1a53b3474f9dcc2f3b1083d90669bd8fa7a9d021eccaca1659c4f446';
+
+async function computeSha256(str) {
+  if (window.crypto && crypto.subtle) {
+    const buf = new TextEncoder().encode(str);
+    const digest = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+  return str === 'Asturias2026dron' ? AUTH_PASSWORD_HASH : 'invalid';
+}
+
+function checkAuthentication() {
+  const overlay = document.getElementById('authOverlay');
+  if (!overlay) return;
+
+  // 1. Permitir acceso directo por enlace: ?pass=... o ?key=...
+  const urlParams = new URLSearchParams(window.location.search);
+  const paramPass = urlParams.get('pass') || urlParams.get('key');
+  if (paramPass) {
+    computeSha256(paramPass).then(hash => {
+      if (hash === AUTH_PASSWORD_HASH) {
+        localStorage.setItem('adritruck_auth', AUTH_PASSWORD_HASH);
+        const cleanUrl = window.location.origin + window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+        unlockApp(overlay);
+        return;
+      }
+    });
+  }
+
+  // 2. Comprobar si el navegador ya fue autorizado anteriormente
+  const savedAuth = localStorage.getItem('adritruck_auth');
+  if (savedAuth === AUTH_PASSWORD_HASH) {
+    unlockApp(overlay, false);
+  } else {
+    lockApp(overlay);
+  }
+}
+
+function unlockApp(overlay, animate = true) {
+  if (!overlay) overlay = document.getElementById('authOverlay');
+  if (overlay) {
+    overlay.classList.add('unlocked');
+  }
+  setTimeout(() => {
+    if (map) map.invalidateSize();
+  }, animate ? 350 : 50);
+}
+
+function lockApp(overlay) {
+  if (!overlay) overlay = document.getElementById('authOverlay');
+  if (overlay) {
+    overlay.classList.remove('unlocked');
+  }
+  const input = document.getElementById('authPasswordInput');
+  if (input) {
+    input.value = '';
+    setTimeout(() => input.focus(), 250);
+  }
+  const errorMsg = document.getElementById('authErrorMsg');
+  if (errorMsg) errorMsg.classList.add('hidden');
+}
+
+function initAuthEvents() {
+  const form = document.getElementById('authForm');
+  const input = document.getElementById('authPasswordInput');
+  const errorMsg = document.getElementById('authErrorMsg');
+  const card = document.querySelector('.auth-card');
+  const btnToggle = document.getElementById('btnToggleAuthPass');
+  const btnLock = document.getElementById('btnLockApp');
+
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const entered = input.value.trim();
+      const hash = await computeSha256(entered);
+      if (hash === AUTH_PASSWORD_HASH) {
+        localStorage.setItem('adritruck_auth', AUTH_PASSWORD_HASH);
+        if (errorMsg) errorMsg.classList.add('hidden');
+        unlockApp();
+      } else {
+        if (errorMsg) errorMsg.classList.remove('hidden');
+        if (card) {
+          card.classList.remove('shake');
+          void card.offsetWidth;
+          card.classList.add('shake');
+        }
+        input.select();
+      }
+    });
+  }
+
+  if (btnToggle && input) {
+    btnToggle.addEventListener('click', () => {
+      if (input.type === 'password') {
+        input.type = 'text';
+        btnToggle.textContent = '🙈';
+      } else {
+        input.type = 'password';
+        btnToggle.textContent = '👁️';
+      }
+    });
+  }
+
+  if (btnLock) {
+    btnLock.addEventListener('click', () => {
+      localStorage.removeItem('adritruck_auth');
+      lockApp();
+    });
+  }
+}
+
 // --- Inicialización ---
 document.addEventListener('DOMContentLoaded', () => {
+  initAuthEvents();
+  checkAuthentication();
   initMap();
   initUIEvents();
   loadStoredSettings();

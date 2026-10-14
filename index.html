@@ -37,6 +37,9 @@
       <button id="btnDemoRoutes" class="btn-secondary btn-sm" title="Cargar ejemplos reales en España">
         📍 Ejemplos España
       </button>
+      <button id="btnLockApp" class="btn-secondary btn-sm" title="Bloquear aplicación / Cerrar sesión">
+        🔒
+      </button>
     </div>
   </header>
 
@@ -436,6 +439,39 @@
           <strong>⚓ Barcelona: Zona Franca Logística → Polígono Badalona Sur</strong>
           <small>Análisis de rondas, gálibos y comparación entre ruta de turismo vs. vehículo pesado articulado.</small>
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pantalla de Bloqueo / Autenticación por Contraseña -->
+  <div id="authOverlay" class="auth-overlay">
+    <div class="auth-card">
+      <div class="auth-icon-wrap">
+        <span class="auth-truck-icon">🚛</span>
+        <span class="auth-lock-badge">🔒</span>
+      </div>
+      <h2>AdriTruck <span class="badge-pro">PRO</span></h2>
+      <p class="auth-subtitle">Acceso Privado para Transporte Pesado</p>
+
+      <form id="authForm" class="auth-form" autocomplete="off">
+        <div class="auth-input-group">
+          <input 
+            type="password" 
+            id="authPasswordInput" 
+            placeholder="Introduce la contraseña..." 
+            autocomplete="current-password"
+            required 
+          />
+          <button type="button" id="btnToggleAuthPass" class="auth-toggle-pass" title="Mostrar/Ocultar contraseña">👁️</button>
+        </div>
+        <div id="authErrorMsg" class="auth-error-msg hidden">⚠️ Contraseña incorrecta. Acceso denegado.</div>
+        <button type="submit" id="btnAuthSubmit" class="btn-primary auth-submit-btn">
+          🔓 Desbloquear Aplicación
+        </button>
+      </form>
+
+      <div class="auth-footer">
+        <span>Uso restringido a personal autorizado</span>
       </div>
     </div>
   </div>
