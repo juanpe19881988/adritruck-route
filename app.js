@@ -128,13 +128,18 @@ function checkAuthentication() {
   const overlay = document.getElementById('authOverlay');
   if (!overlay) return;
 
-  // 1. Permitir acceso directo por enlace: ?pass=... o ?key=...
+  // Limpiar cualquier autorización persistente previa en localStorage
+  try {
+    localStorage.removeItem('adritruck_auth');
+  } catch (e) {}
+
+  // 1. Permitir acceso directo por enlace: ?pass=... o ?key=... (solo para esta sesión)
   const urlParams = new URLSearchParams(window.location.search);
   const paramPass = urlParams.get('pass') || urlParams.get('key');
   if (paramPass) {
     computeSha256(paramPass).then(hash => {
       if (hash === AUTH_PASSWORD_HASH) {
-        localStorage.setItem('adritruck_auth', AUTH_PASSWORD_HASH);
+        sessionStorage.setItem('adritruck_auth', AUTH_PASSWORD_HASH);
         const cleanUrl = window.location.origin + window.location.pathname;
         window.history.replaceState({}, document.title, cleanUrl);
         unlockApp(overlay);
@@ -143,8 +148,8 @@ function checkAuthentication() {
     });
   }
 
-  // 2. Comprobar si el navegador ya fue autorizado anteriormente
-  const savedAuth = localStorage.getItem('adritruck_auth');
+  // 2. Comprobar si la pestaña/sesión actual ya fue autenticada
+  const savedAuth = sessionStorage.getItem('adritruck_auth');
   if (savedAuth === AUTH_PASSWORD_HASH) {
     unlockApp(overlay, false);
   } else {
@@ -190,7 +195,8 @@ function initAuthEvents() {
       const entered = input.value.trim();
       const hash = await computeSha256(entered);
       if (hash === AUTH_PASSWORD_HASH) {
-        localStorage.setItem('adritruck_auth', AUTH_PASSWORD_HASH);
+        // Se guarda solo en sessionStorage: al cerrar la pestaña o abrir ventana nueva, se volverá a pedir
+        sessionStorage.setItem('adritruck_auth', AUTH_PASSWORD_HASH);
         if (errorMsg) errorMsg.classList.add('hidden');
         unlockApp();
       } else {
@@ -219,7 +225,10 @@ function initAuthEvents() {
 
   if (btnLock) {
     btnLock.addEventListener('click', () => {
-      localStorage.removeItem('adritruck_auth');
+      sessionStorage.removeItem('adritruck_auth');
+      try {
+        localStorage.removeItem('adritruck_auth');
+      } catch (e) {}
       lockApp();
     });
   }
